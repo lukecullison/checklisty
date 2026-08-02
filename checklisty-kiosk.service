@@ -7,18 +7,21 @@ Requires=checklisty.service
 Type=simple
 User=lukecullison
 Environment=DISPLAY=:0
+Environment=CHROME_NO_SANDBOX=1
 ExecStart=/usr/bin/chromium-browser \
   --no-first-run \
   --no-default-browser-check \
   --disable-infobars \
-  --kiosk http://localhost:3001 \
-  --window-size=1920,1080 \
+  --disable-session-crashed-bubble \
   --disable-features=TranslateUI \
   --disable-hang-monitor \
   --disable-popup-blocking \
   --disable-back-forward-reload-redirect \
   --disable-desktop-notifications \
-  --app=http://localhost:3001
+  --disable-crash-handler \
+  --disable-breakpad \
+  --user-data-dir=/tmp/chromium-kiosk \
+  --new-window http://localhost:3001
 Restart=on-failure
 RestartSec=5
 
