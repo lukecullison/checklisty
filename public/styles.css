@@ -262,8 +262,13 @@ header h1 {
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
-  opacity: 0;
+  opacity: 0.4;
   transition: all 0.2s;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .item:hover .btn-delete-item,
@@ -275,6 +280,7 @@ header h1 {
 .btn-delete-item:active {
   background: rgba(239, 68, 68, 0.2);
   color: var(--danger);
+  opacity: 1;
 }
 
 /* Add Item */

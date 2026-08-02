@@ -1,6 +1,8 @@
 (function() {
   const canvas = document.getElementById('confetti-canvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   let particles = [];
   let animationId = null;
 

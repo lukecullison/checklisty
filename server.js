@@ -3,7 +3,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -29,13 +29,12 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS stats (
-    id INTEGER PRIMARY KEY KEY VALUE,
     total_completed INTEGER DEFAULT 0,
     streak INTEGER DEFAULT 0,
     last_completed_date TEXT
   );
 
-  INSERT OR IGNORE INTO stats (id, total_completed, streak) VALUES (1, 0, 0);
+  INSERT OR IGNORE INTO stats (total_completed, streak) VALUES (0, 0);
 `);
 
 // Lists API
@@ -82,7 +81,7 @@ app.post('/api/items/:id/toggle', (req, res) => {
   db.prepare('UPDATE items SET completed = ? WHERE id = ?').run(newCompleted, req.params.id);
 
   if (newCompleted) {
-    const stats = db.prepare('SELECT * FROM stats WHERE id = 1').get();
+    const stats = db.prepare('SELECT * FROM stats LIMIT 1').get();
     const today = new Date().toISOString().split('T')[0];
     let newStreak = stats.streak;
 
@@ -94,7 +93,7 @@ app.post('/api/items/:id/toggle', (req, res) => {
       newStreak = 1;
     }
 
-    db.prepare('UPDATE stats SET total_completed = total_completed + 1, streak = ?, last_completed_date = ? WHERE id = 1')
+    db.prepare('UPDATE stats SET total_completed = total_completed + 1, streak = ?, last_completed_date = ?')
       .run(newStreak, today);
   }
 
@@ -116,7 +115,7 @@ app.put('/api/items/:id/reorder', (req, res) => {
 
 // Stats API
 app.get('/api/stats', (req, res) => {
-  const stats = db.prepare('SELECT * FROM stats WHERE id = 1').get();
+  const stats = db.prepare('SELECT * FROM stats LIMIT 1').get();
   const totalItems = db.prepare('SELECT COUNT(*) as count FROM items').get();
   const completedItems = db.prepare('SELECT COUNT(*) as count FROM items WHERE completed = 1').get();
   res.json({
@@ -127,8 +126,8 @@ app.get('/api/stats', (req, res) => {
 });
 
 app.post('/api/stats/reset', (req, res) => {
-  db.prepare('UPDATE stats SET total_completed = 0, streak = 0, last_completed_date = NULL WHERE id = 1').run();
-  const stats = db.prepare('SELECT * FROM stats WHERE id = 1').get();
+  db.prepare('UPDATE stats SET total_completed = 0, streak = 0, last_completed_date = NULL').run();
+  const stats = db.prepare('SELECT * FROM stats LIMIT 1').get();
   res.json(stats);
 });
 
