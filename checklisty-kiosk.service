@@ -2,12 +2,12 @@
 Description=Checklisty Kiosk Browser
 After=checklisty.service
 Requires=checklisty.service
+After=graphical-session.target
 
 [Service]
 Type=simple
 User=lukecullison
 Environment=DISPLAY=:0
-Environment=CHROME_NO_SANDBOX=1
 ExecStart=/usr/bin/chromium-browser \
   --no-first-run \
   --no-default-browser-check \
@@ -26,4 +26,4 @@ Restart=on-failure
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
