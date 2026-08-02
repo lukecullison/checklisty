@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Checklisty!</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="confetti-canvas"></div>
+
+  <div class="app-container">
+    <header>
+      <h1>Checklisty<span class="sparkle">✨</span></h1>
+      <div class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-number" id="streak-count">0</span>
+          <span class="stat-label">🔥 Streak</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number" id="total-completed">0</span>
+          <span class="stat-label">✅ Done</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-number" id="global-percent">0%</span>
+          <span class="stat-label">📊 Progress</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="lists-container" id="lists-container">
+        <!-- Lists will be rendered here -->
+      </div>
+
+      <div class="add-list-container" id="add-list-container">
+        <button class="btn-add-list" id="btn-show-add-list">
+          <span class="btn-icon">+</span>
+          New List
+        </button>
+      </div>
+
+      <div class="add-list-form hidden" id="add-list-form">
+        <input type="text" id="list-name-input" placeholder="Give your list a name..." maxlength="40">
+        <div class="color-picker">
+          <button class="color-option active" data-color="#6366f1" style="background: #6366f1;"></button>
+          <button class="color-option" data-color="#ec4899" style="background: #ec4899;"></button>
+          <button class="color-option" data-color="#f59e0b" style="background: #f59e0b;"></button>
+          <button class="color-option" data-color="#10b981" style="background: #10b981;"></button>
+          <button class="color-option" data-color="#3b82f6" style="background: #3b82f6;"></button>
+          <button class="color-option" data-color="#8b5cf6" style="background: #8b5cf6;"></button>
+          <button class="color-option" data-color="#ef4444" style="background: #ef4444;"></button>
+          <button class="color-option" data-color="#14b8a6" style="background: #14b8a6;"></button>
+        </div>
+        <button class="btn-create-list" id="btn-create-list">Create List</button>
+        <button class="btn-cancel" id="btn-cancel-list">Cancel</button>
+      </div>
+    </main>
+  </div>
+
+  <div class="celebration-overlay hidden" id="celebration-overlay">
+    <div class="celebration-content">
+      <div class="celebration-emoji">🎉</div>
+      <h2 class="celebration-title">List Complete!</h2>
+      <p class="celebration-subtitle">You crushed it!</p>
+    </div>
+  </div>
+
+  <script src="confetti.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
