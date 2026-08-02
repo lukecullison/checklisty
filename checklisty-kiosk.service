@@ -1,0 +1,26 @@
+[Unit]
+Description=Checklisty Kiosk Browser
+After=checklisty.service
+Requires=checklisty.service
+
+[Service]
+Type=simple
+User=lukecullison
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/chromium-browser \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-infobars \
+  --kiosk http://localhost:3001 \
+  --window-size=1920,1080 \
+  --disable-features=TranslateUI \
+  --disable-hang-monitor \
+  --disable-popup-blocking \
+  --disable-back-forward-reload-redirect \
+  --disable-desktop-notifications \
+  --app=http://localhost:3001
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
