@@ -154,11 +154,14 @@
     renderListItems(listId);
     updateStats();
 
-    if (item.completed) {
+    if (item.completed && window.confetti) {
       const rect = itemEl.getBoundingClientRect();
-      confetti.burst(100, rect.left + rect.width / 2, rect.top);
-      setTimeout(() => confetti.burst(80, rect.left + rect.width / 2, rect.top), 200);
-      setTimeout(() => confetti.rain(60), 100);
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top;
+      window.confetti.burst(100, cx, cy);
+      setTimeout(() => window.confetti.burst(80, cx, cy), 200);
+      setTimeout(() => window.confetti.rain(60), 100);
+      setTimeout(() => window.confetti.burst(60, cx, cy), 400);
     }
 
     // Check if list is complete

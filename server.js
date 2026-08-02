@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -8,136 +8,200 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const db = new Database(path.join(__dirname, 'checklisty.db'));
+const DB_PATH = path.join(__dirname, 'checklisty.db');
+const fs = require('fs');
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS lists (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    color TEXT NOT NULL DEFAULT '#6366f1',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+let db;
 
-  CREATE TABLE IF NOT EXISTS items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    list_id INTEGER NOT NULL,
-    text TEXT NOT NULL,
-    completed INTEGER DEFAULT 0,
-    order_index INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
-  );
+async function initDb() {
+  const SQL = await initSqlJs({
+    locateFile: file => `./node_modules/sql.js/dist/${file}`
+  });
 
-  CREATE TABLE IF NOT EXISTS stats (
-    total_completed INTEGER DEFAULT 0,
-    streak INTEGER DEFAULT 0,
-    last_completed_date TEXT
-  );
+  let existingDb = null;
+  if (fs.existsSync(DB_PATH)) {
+    const fileBuffer = fs.readFileSync(DB_PATH);
+    existingDb = new SQL.Database(fileBuffer);
+  }
 
-  INSERT OR IGNORE INTO stats (total_completed, streak) VALUES (0, 0);
-`);
+  db = existingDb || new SQL.Database();
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS lists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#6366f1',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      list_id INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      completed INTEGER DEFAULT 0,
+      order_index INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+    )
+  `);
+
+  try {
+    db.exec("SELECT COUNT(*) FROM stats");
+  } catch (e) {
+    db.run(`CREATE TABLE IF NOT EXISTS stats (
+      total_completed INTEGER DEFAULT 0,
+      streak INTEGER DEFAULT 0,
+      last_completed_date TEXT
+    )`);
+    db.run("INSERT INTO stats (total_completed, streak) VALUES (0, 0)");
+  }
+
+  saveDb();
+}
+
+function saveDb() {
+  const data = db.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(DB_PATH, buffer);
+}
+
+// Helper to convert sql.js rows to array of objects
+function toObject(stmt) {
+  const result = stmt.getAsObject();
+  return result;
+}
+
+function toObjectArray(stmt) {
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  return rows;
+}
 
 // Lists API
 app.get('/api/lists', (req, res) => {
-  const lists = db.prepare('SELECT * FROM lists ORDER BY created_at DESC').all();
-  res.json(lists);
+  const rows = toObjectArray(db.prepare("SELECT * FROM lists ORDER BY created_at DESC").finalize());
+  res.json(rows);
 });
 
 app.post('/api/lists', (req, res) => {
   const { name, color } = req.body;
   const colorChoices = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6'];
   const listColor = color || colorChoices[Math.floor(Math.random() * colorChoices.length)];
-  const stmt = db.prepare('INSERT INTO lists (name, color) VALUES (?, ?)');
-  const result = stmt.run(name, listColor);
-  const list = db.prepare('SELECT * FROM lists WHERE id = ?').get(result.lastInsertRowid);
-  res.json(list);
+  db.run("INSERT INTO lists (name, color) VALUES (?, ?)", [name, listColor]);
+  const id = db.exec("SELECT last_insert_rowid() as id")[0].values[0][0];
+  const list = toObjectArray(db.prepare(`SELECT * FROM lists WHERE id = ${id}`).finalize());
+  saveDb();
+  res.json(list[0]);
 });
 
 app.delete('/api/lists/:id', (req, res) => {
-  db.prepare('DELETE FROM lists WHERE id = ?').run(req.params.id);
+  db.run("DELETE FROM lists WHERE id = ?", [req.params.id]);
+  saveDb();
   res.json({ success: true });
 });
 
 // Items API
 app.get('/api/lists/:listId/items', (req, res) => {
-  const items = db.prepare('SELECT * FROM items WHERE list_id = ? ORDER BY order_index ASC').all(req.params.listId);
-  res.json(items);
+  const rows = toObjectArray(db.prepare(`SELECT * FROM items WHERE list_id = ${req.params.listId} ORDER BY order_index ASC`).finalize());
+  res.json(rows);
 });
 
 app.post('/api/lists/:listId/items', (req, res) => {
   const { text } = req.body;
-  const count = db.prepare('SELECT COUNT(*) as count FROM items WHERE list_id = ?').get(req.params.listId);
-  const stmt = db.prepare('INSERT INTO items (list_id, text, order_index) VALUES (?, ?, ?)');
-  const result = stmt.run(req.params.listId, text, count.count);
-  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(result.lastInsertRowid);
-  res.json(item);
+  const count = db.exec(`SELECT COUNT(*) as count FROM items WHERE list_id = ${req.params.listId}`)[0].values[0][0];
+  db.run("INSERT INTO items (list_id, text, order_index) VALUES (?, ?, ?)", [req.params.listId, text, count]);
+  const id = db.exec("SELECT last_insert_rowid() as id")[0].values[0][0];
+  const item = toObjectArray(db.prepare(`SELECT * FROM items WHERE id = ${id}`).finalize());
+  saveDb();
+  res.json(item[0]);
 });
 
 app.post('/api/items/:id/toggle', (req, res) => {
-  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+  const item = toObjectArray(db.prepare(`SELECT * FROM items WHERE id = ${req.params.id}`).finalize())[0];
   if (!item) return res.status(404).json({ error: 'Item not found' });
 
   const newCompleted = item.completed ? 0 : 1;
-  db.prepare('UPDATE items SET completed = ? WHERE id = ?').run(newCompleted, req.params.id);
+  db.run("UPDATE items SET completed = ? WHERE id = ?", [newCompleted, req.params.id]);
 
   if (newCompleted) {
-    const stats = db.prepare('SELECT * FROM stats LIMIT 1').get();
-    const today = new Date().toISOString().split('T')[0];
-    let newStreak = stats.streak;
+    const stats = db.exec("SELECT * FROM stats LIMIT 1")[0];
+    const statsRow = stats.values[0];
+    const completed = statsRow[stats.columns.indexOf('total_completed')];
+    const streak = statsRow[stats.columns.indexOf('streak')];
+    const lastDate = statsRow[stats.columns.indexOf('last_completed_date')];
 
-    if (stats.last_completed_date === today) {
-      // Same day, don't increment streak
-    } else if (stats.last_completed_date === new Date(Date.now() - 86400000).toISOString().split('T')[0]) {
-      newStreak = stats.streak + 1;
+    const today = new Date().toISOString().split('T')[0];
+    let newStreak = streak;
+
+    if (lastDate === today) {
+      // same day, don't increment
+    } else if (lastDate === new Date(Date.now() - 86400000).toISOString().split('T')[0]) {
+      newStreak = streak + 1;
     } else {
       newStreak = 1;
     }
 
-    db.prepare('UPDATE stats SET total_completed = total_completed + 1, streak = ?, last_completed_date = ?')
-      .run(newStreak, today);
+    db.run("UPDATE stats SET total_completed = ?, streak = ?, last_completed_date = ?", [completed + 1, newStreak, today]);
   }
 
-  const updated = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+  const updated = toObjectArray(db.prepare(`SELECT * FROM items WHERE id = ${req.params.id}`).finalize())[0];
+  saveDb();
   res.json(updated);
 });
 
 app.delete('/api/items/:id', (req, res) => {
-  db.prepare('DELETE FROM items WHERE id = ?').run(req.params.id);
+  db.run("DELETE FROM items WHERE id = ?", [req.params.id]);
+  saveDb();
   res.json({ success: true });
 });
 
 app.put('/api/items/:id/reorder', (req, res) => {
-  const { order_index } = req.body;
-  db.prepare('UPDATE items SET order_index = ? WHERE id = ?').run(order_index, req.params.id);
-  const updated = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+  db.run("UPDATE items SET order_index = ? WHERE id = ?", [req.body.order_index, req.params.id]);
+  const updated = toObjectArray(db.prepare(`SELECT * FROM items WHERE id = ${req.params.id}`).finalize())[0];
+  saveDb();
   res.json(updated);
 });
 
 // Stats API
 app.get('/api/stats', (req, res) => {
-  const stats = db.prepare('SELECT * FROM stats LIMIT 1').get();
-  const totalItems = db.prepare('SELECT COUNT(*) as count FROM items').get();
-  const completedItems = db.prepare('SELECT COUNT(*) as count FROM items WHERE completed = 1').get();
+  const stats = db.exec("SELECT * FROM stats LIMIT 1")[0];
+  const statsRow = stats.values[0];
+  const totalItems = db.exec("SELECT COUNT(*) as count FROM items")[0].values[0][0];
+  const completedItems = db.exec("SELECT COUNT(*) as count FROM items WHERE completed = 1")[0].values[0][0];
   res.json({
-    ...stats,
-    total_items: totalItems.count,
-    completed_items: completedItems.count
+    total_completed: statsRow[stats.columns.indexOf('total_completed')],
+    streak: statsRow[stats.columns.indexOf('streak')],
+    last_completed_date: statsRow[stats.columns.indexOf('last_completed_date')],
+    total_items: totalItems,
+    completed_items: completedItems
   });
 });
 
 app.post('/api/stats/reset', (req, res) => {
-  db.prepare('UPDATE stats SET total_completed = 0, streak = 0, last_completed_date = NULL').run();
-  const stats = db.prepare('SELECT * FROM stats LIMIT 1').get();
-  res.json(stats);
+  db.run("UPDATE stats SET total_completed = 0, streak = 0, last_completed_date = NULL");
+  saveDb();
+  const stats = db.exec("SELECT * FROM stats LIMIT 1")[0];
+  const statsRow = stats.values[0];
+  res.json({
+    total_completed: statsRow[stats.columns.indexOf('total_completed')],
+    streak: statsRow[stats.columns.indexOf('streak')],
+    last_completed_date: statsRow[stats.columns.indexOf('last_completed_date')]
+  });
 });
 
 app.get('/api/lists/:listId/progress', (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) as count FROM items WHERE list_id = ?').get(req.params.listId);
-  const completed = db.prepare('SELECT COUNT(*) as count FROM items WHERE list_id = ? AND completed = 1').get(req.params.listId);
-  const percent = total.count > 0 ? Math.round((completed.count / total.count) * 100) : 0;
-  res.json({ total: total.count, completed: completed.count, percent });
+  const total = db.exec(`SELECT COUNT(*) as count FROM items WHERE list_id = ${req.params.listId}`)[0].values[0][0];
+  const completed = db.exec(`SELECT COUNT(*) as count FROM items WHERE list_id = ${req.params.listId} AND completed = 1`)[0].values[0][0];
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  res.json({ total, completed, percent });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Checklisty running at http://localhost:${PORT}`);
+initDb().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Checklisty running at http://localhost:${PORT}`);
+  });
 });

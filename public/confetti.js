@@ -1,97 +1,77 @@
 (function() {
-  const canvas = document.getElementById('confetti-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  let particles = [];
-  let animationId = null;
+  let container = null;
 
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+  function getContainer() {
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'confetti-container';
+      container.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;overflow:hidden;';
+      document.body.appendChild(container);
+    }
+    return container;
   }
 
-  window.addEventListener('resize', resize);
-  resize();
+  const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6', '#ffffff', '#ff6b6b', '#ffd93d'];
 
-  const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6', '#ffffff'];
+  function createPiece(x, y, burst) {
+    const piece = document.createElement('div');
+    const size = Math.random() * 10 + 6;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const isCircle = Math.random() > 0.5;
+    const drift = (Math.random() - 0.5) * (burst ? 300 : 150);
+    const fallDistance = Math.random() * 400 + 300;
+    const rotation = Math.random() * 720 - 360;
+    const duration = Math.random() * 1500 + 1000;
 
-  class Particle {
-    constructor(x, y) {
-      this.x = x || Math.random() * canvas.width;
-      this.y = y || -10;
-      this.size = Math.random() * 10 + 5;
-      this.speedX = (Math.random() - 0.5) * 8;
-      this.speedY = Math.random() * 4 + 2;
-      this.color = colors[Math.floor(Math.random() * colors.length)];
-      this.rotation = Math.random() * 360;
-      this.rotationSpeed = (Math.random() - 0.5) * 10;
-      this.opacity = 1;
-      this.shape = Math.random() > 0.5 ? 'rect' : 'circle';
-    }
+    piece.style.cssText = `
+      position: absolute;
+      left: ${x}px;
+      top: ${y}px;
+      width: ${size}px;
+      height: ${isCircle ? size : size * 0.6}px;
+      background: ${color};
+      border-radius: ${isCircle ? '50%' : '2px'};
+      opacity: 1;
+      pointer-events: none;
+    `;
 
-    update() {
-      this.x += this.speedX;
-      this.y += this.speedY;
-      this.speedY += 0.1;
-      this.rotation += this.rotationSpeed;
-      this.opacity -= 0.005;
-    }
+    getContainer().appendChild(piece);
 
-    draw() {
-      ctx.save();
-      ctx.translate(this.x, this.y);
-      ctx.rotate((this.rotation * Math.PI) / 180);
-      ctx.globalAlpha = Math.max(0, this.opacity);
-      ctx.fillStyle = this.color;
-
-      if (this.shape === 'rect') {
-        ctx.fillRect(-this.size / 2, -this.size / 4, this.size, this.size / 2);
-      } else {
-        ctx.beginPath();
-        ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.restore();
-    }
-  }
-
-  function animate() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    particles = particles.filter(p => p.opacity > 0 && p.y < canvas.height + 50);
-
-    particles.forEach(p => {
-      p.update();
-      p.draw();
+    const anim = piece.animate([
+      { transform: `translate(0, 0) rotate(0deg)`, opacity: 1 },
+      { transform: `translate(${drift / 2}px, ${fallDistance * 0.3}px) rotate(${rotation / 2}deg)`, opacity: 0.8, offset: 0.3 },
+      { transform: `translate(${drift}px, ${fallDistance}px) rotate(${rotation}deg)`, opacity: 0 }
+    ], {
+      duration: duration,
+      easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      fill: 'forwards'
     });
 
-    if (particles.length > 0) {
-      animationId = requestAnimationFrame(animate);
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    anim.onfinish = () => piece.remove();
   }
 
-  function burst(count = 100, originX, originY) {
-    for (let i = 0; i < count; i++) {
-      const p = new Particle(originX, originY);
-      p.speedX = (Math.random() - 0.5) * 20;
-      p.speedY = (Math.random() - 0.5) * 20 - 5;
-      p.size = Math.random() * 12 + 6;
-      particles.push(p);
-    }
-    if (!animationId) animate();
-  }
+  function burst(count, x, y) {
+    const container = getContainer();
+    const rect = container.getBoundingClientRect();
+    const cx = x || rect.width / 2;
+    const cy = y || rect.height / 2;
 
-  function rain(count = 150) {
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
-        particles.push(new Particle());
-      }, Math.random() * 1000);
+        createPiece(cx, cy, true);
+      }, Math.random() * 300);
     }
-    if (!animationId) animate();
+  }
+
+  function rain(count) {
+    const container = getContainer();
+    const width = container.getBoundingClientRect().width;
+
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        createPiece(Math.random() * width, -20, false);
+      }, Math.random() * 1500);
+    }
   }
 
   window.confetti = { burst, rain };
